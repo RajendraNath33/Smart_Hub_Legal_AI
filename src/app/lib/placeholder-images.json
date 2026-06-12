@@ -1,0 +1,23 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "legal-library",
+      "description": "Professional law library with books",
+      "imageUrl": "https://picsum.photos/seed/legal1/1200/800",
+      "imageHint": "legal library books"
+    },
+    {
+      "id": "judiciary-building",
+      "description": "Supreme court architectural style",
+      "imageUrl": "https://picsum.photos/seed/legal2/1200/800",
+      "imageHint": "court building"
+    },
+    {
+      "id": "document-analysis",
+      "description": "Close up of legal documents and gavel",
+      "imageUrl": "https://picsum.photos/seed/legal3/1200/800",
+      "imageHint": "legal gavel"
+    }
+  ]
+}
