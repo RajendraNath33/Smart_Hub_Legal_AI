@@ -47,7 +47,7 @@ export default function Dashboard() {
             <Card key={stat.label} className="border-none shadow-sm bg-card/50">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between mb-2">
-                  <div className={stat.color}>
+                  <div className={cn(stat.color)}>
                     <stat.icon className="h-5 w-5" />
                   </div>
                 </div>
