@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -34,7 +33,7 @@ export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Welcome to SmartHub Legal AI. I have access to your internal knowledge base and judgment repository. How can I assist with your research today?",
+      content: "Welcome to SmartHub Legal AI. I am your specialized reasoning engine. How can I assist with your legal research today?",
       timestamp: new Date()
     }
   ]);
@@ -64,13 +63,11 @@ export default function AIAssistantPage() {
     setIsLoading(true);
 
     try {
-      // In a real app, we'd fetch actual context from Qdrant/MinIO here
       const result: AILegalAssistantOutput = await aiLegalAssistant({
         legalQuestion: currentInput,
         contextDocuments: [
-          "Case: Supreme Court of India - Civil Appeal No. 123 of 2023",
-          "Bare Act: Indian Evidence Act, Section 65B regarding Electronic Records",
-          "Judgment excerpt: The necessity of secondary evidence authentication is paramount."
+          "System Status: Knowledge base connection pending initialization.",
+          "Note: Using baseline legal reasoning without enterprise-specific context."
         ]
       });
 
@@ -85,7 +82,7 @@ export default function AIAssistantPage() {
       console.error("AI Assistant Error:", error);
       const errorMsg: Message = {
         role: "assistant",
-        content: "I apologize, but I encountered an error processing your request. Please ensure the local AI model (Ollama) is responsive.",
+        content: "I apologize, but I encountered an error processing your request. Please check the AI service configuration.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -103,14 +100,14 @@ export default function AIAssistantPage() {
               <Scale className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-headline font-bold">Enterprise Legal Reasoner</h2>
+              <h2 className="font-headline font-bold">Legal Reasoning Assistant</h2>
               <div className="flex items-center gap-1.5 text-[10px] text-secondary font-bold uppercase tracking-wider">
-                <ShieldCheck className="h-3 w-3" /> Production Mode • DeepSeek-R1
+                <ShieldCheck className="h-3 w-3" /> Reasoning Active
               </div>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-2">
-             <Badge variant="outline" className="text-secondary border-secondary/30 text-[10px]">99.8% Context Match</Badge>
+             <Badge variant="outline" className="text-secondary border-secondary/30 text-[10px]">Ready</Badge>
           </div>
         </div>
 
@@ -141,7 +138,7 @@ export default function AIAssistantPage() {
                   {msg.citations && msg.citations.length > 0 && (
                     <div className="space-y-2 mt-2">
                       <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                        <Quote className="h-3 w-3" /> Verified Citations
+                        <Quote className="h-3 w-3" /> Evidence
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {msg.citations.map((cite, cidx) => (
@@ -179,7 +176,7 @@ export default function AIAssistantPage() {
             <div className="relative flex-1 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-secondary transition-colors" />
               <Input
-                placeholder="Ask a legal question... (e.g., 'What are the precedents for Article 21 violations in corporate contexts?')"
+                placeholder="Ask a legal question..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 className="pl-10 h-12 bg-background border-border hover:border-secondary focus-visible:ring-secondary/20 transition-all rounded-xl shadow-inner"
@@ -189,17 +186,6 @@ export default function AIAssistantPage() {
               <Send className="h-5 w-5" />
             </Button>
           </form>
-          <div className="flex justify-center mt-3 gap-6">
-            <button type="button" className="text-[10px] text-muted-foreground hover:text-secondary transition-colors font-medium flex items-center gap-1">
-              <Scale className="h-3 w-3" /> Judiciary Mode
-            </button>
-            <button type="button" className="text-[10px] text-muted-foreground hover:text-secondary transition-colors font-medium flex items-center gap-1">
-              <Search className="h-3 w-3" /> Deep Research
-            </button>
-            <button type="button" className="text-[10px] text-muted-foreground hover:text-secondary transition-colors font-medium flex items-center gap-1">
-              <FileText className="h-3 w-3" /> Drafting Context
-            </button>
-          </div>
         </div>
       </div>
     </AppLayoutWrapper>

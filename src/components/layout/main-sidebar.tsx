@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from "react";
@@ -16,9 +15,12 @@ import {
   Settings, 
   ShieldCheck, 
   Activity,
-  ChevronRight
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
+import { useAuth } from "@/components/auth-provider";
 import {
   Sidebar,
   SidebarContent,
@@ -54,6 +56,11 @@ const adminNav = [
 
 export function MainSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -63,7 +70,7 @@ export function MainSidebar() {
             SH
           </div>
           <span className="font-headline font-bold text-lg text-sidebar-foreground truncate group-data-[collapsible=icon]:hidden">
-            SmartHub AI
+            SmartHub Legal AI
           </span>
         </Link>
       </SidebarHeader>
@@ -141,16 +148,26 @@ export function MainSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border/50 p-4">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
-          <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/30 flex items-center justify-center font-bold text-secondary text-xs">
-            JD
-          </div>
-          <div className="flex flex-col truncate group-data-[collapsible=icon]:hidden">
-            <span className="text-xs font-bold text-sidebar-foreground">John Doe, Esq.</span>
-            <span className="text-[10px] text-sidebar-foreground/60">Enterprise Tier</span>
-          </div>
-        </div>
+      <SidebarFooter className="border-t border-sidebar-border/50 p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center">
+              <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/30 flex items-center justify-center font-bold text-secondary text-xs">
+                {user?.email?.[0].toUpperCase() || "U"}
+              </div>
+              <div className="flex flex-col truncate group-data-[collapsible=icon]:hidden">
+                <span className="text-xs font-bold text-sidebar-foreground truncate">{user?.email}</span>
+                <span className="text-[10px] text-sidebar-foreground/60 uppercase">System Member</span>
+              </div>
+            </div>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleLogout} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );
