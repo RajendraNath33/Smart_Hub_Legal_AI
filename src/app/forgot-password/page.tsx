@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,20 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Mail, ArrowLeft, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/components/auth-provider";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/");
+    }
+  }, [user, loading, router]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();

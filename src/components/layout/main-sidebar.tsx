@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -56,10 +56,12 @@ const adminNav = [
 
 export function MainSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
 
   const handleLogout = async () => {
     await signOut(auth);
+    router.push("/login");
   };
 
   return (
