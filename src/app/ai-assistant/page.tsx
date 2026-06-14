@@ -19,7 +19,7 @@ import {
   BookOpen,
   FileText
 } from "lucide-react";
-import { aiLegalAssistant, AILegalAssistantOutput } from "@/ai/flows/ai-legal-assistant-flow";
+import type { AILegalAssistantOutput } from "@/ai/flows/ai-legal-assistant-flow";
 import { cn } from "@/lib/utils";
 
 type Message = {
@@ -63,27 +63,35 @@ export default function AIAssistantPage() {
     setIsLoading(true);
 
     try {
-      const result: AILegalAssistantOutput = await aiLegalAssistant({
-        legalQuestion: currentInput,
-        contextDocuments: [
-          "System Status: Knowledge base connection pending initialization.",
-          "Note: Using baseline legal reasoning without enterprise-specific context."
-        ]
+      const response = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: currentInput }),
+        cache: "no-store",
       });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "AI service is unavailable. Please try again later.");
+      }
+
+      const result: AILegalAssistantOutput = await response.json();
 
       const aiMsg: Message = {
         role: "assistant",
         content: result.answer,
         citations: result.citations,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMsg]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Assistant Error:", error);
       const errorMsg: Message = {
         role: "assistant",
-        content: "I apologize, but I encountered an error processing your request. Please check the AI service configuration.",
-        timestamp: new Date()
+        content: error?.message
+          ? `I apologize, I couldn't complete that request: ${error.message}`
+          : "I apologize, but I encountered an error processing your request. Please try again later.",
+        timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
