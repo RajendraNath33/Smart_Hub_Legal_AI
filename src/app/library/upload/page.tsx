@@ -3,19 +3,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AppLayoutWrapper } from "@/components/layout/app-layout-wrapper";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { AppLayoutWrapper } from "../../../components/layout/app-layout-wrapper";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../../components/ui/card";
+import { Label } from "../../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
+import { Textarea } from "../../../components/ui/textarea";
 import { Upload, ArrowLeft, FileText, Loader2 } from "lucide-react";
-import { useAuth } from "@/components/auth-provider";
-import { db, storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useAuth } from "../../../components/auth-provider";
+import { db } from "../../../lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "../../../hooks/use-toast";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf";
 
 const categories = [
@@ -70,12 +69,22 @@ export default function LibraryUploadPage() {
     setIsUploading(true);
     setExtractedText("");
 
-    const storageRef = ref(storage, `legal_documents/${user.uid}/${Date.now()}_${file.name}`);
+    const formData = new FormData();
+    formData.append("file", file);
 
     try {
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
+      const uploadResponse = await fetch("/api/library/upload", {
+        method: "POST",
+        body: formData,
+      });
 
+      const result = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        throw new Error(result.error || "Failed to upload PDF to R2.");
+      }
+
+      const { r2Key, r2Url } = result;
       let pdfText: string | null = null;
       let extractionStatus: "completed" | "failed" = "completed";
 
@@ -95,21 +104,22 @@ export default function LibraryUploadPage() {
       await addDoc(collection(db, "legal_documents"), {
         title: title.trim(),
         category,
-        uploadDate: serverTimestamp(),
-        fileUrl: downloadUrl,
+        notes: notes.trim() || null,
         fileName: file.name,
-        storagePath: uploadResult.ref.fullPath,
-        uploaderUid: user.uid,
+        fileSize: file.size,
+        uploadedAt: serverTimestamp(),
+        r2Key,
+        r2Url,
         extractedText: pdfText,
         extractionStatus,
-        notes: notes.trim() || null,
+        uploaderUid: user.uid,
         vectorEmbedding: null,
         embeddingStatus: "pending",
         createdAt: serverTimestamp(),
       });
 
       if (extractionStatus === "completed") {
-        toast({ title: "Upload Complete", description: "Document uploaded and indexed successfully." });
+        toast({ title: "PDF uploaded successfully", description: "PDF uploaded successfully" });
       }
 
       router.push("/library");
