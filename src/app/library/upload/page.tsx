@@ -16,9 +16,7 @@ import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "@/hooks/use-toast";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf";
-
-GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.worker.min.js";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf";
 
 const categories = [
   "Bare Act",
@@ -52,7 +50,7 @@ export default function LibraryUploadPage() {
 
   const extractTextFromPdf = async (pdfFile: File) => {
     const arrayBuffer = await pdfFile.arrayBuffer();
-    const pdf = await getDocument({ data: arrayBuffer }).promise;
+    const pdf = await getDocument({ data: arrayBuffer, disableWorker: true }).promise;
     const pageTexts: string[] = [];
 
     for (let i = 1; i <= pdf.numPages; i += 1) {
@@ -72,13 +70,27 @@ export default function LibraryUploadPage() {
     setIsUploading(true);
     setExtractedText("");
 
-    try {
-      const pdfText = await extractTextFromPdf(file);
-      setExtractedText(pdfText);
+    const storageRef = ref(storage, `legal_documents/${user.uid}/${Date.now()}_${file.name}`);
 
-      const storageRef = ref(storage, `legal_documents/${user.uid}/${Date.now()}_${file.name}`);
+    try {
       const uploadResult = await uploadBytes(storageRef, file);
       const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+      let pdfText: string | null = null;
+      let extractionStatus: "completed" | "failed" = "completed";
+
+      try {
+        pdfText = await extractTextFromPdf(file);
+        setExtractedText(pdfText);
+      } catch (extractError) {
+        console.warn("Text extraction failed, saving metadata anyway:", extractError);
+        extractionStatus = "failed";
+        toast({
+          title: "Upload Completed",
+          description: "PDF uploaded, but text extraction failed. Document metadata was still saved.",
+          variant: "warning",
+        });
+      }
 
       await addDoc(collection(db, "legal_documents"), {
         title: title.trim(),
@@ -89,13 +101,17 @@ export default function LibraryUploadPage() {
         storagePath: uploadResult.ref.fullPath,
         uploaderUid: user.uid,
         extractedText: pdfText,
+        extractionStatus,
         notes: notes.trim() || null,
         vectorEmbedding: null,
         embeddingStatus: "pending",
         createdAt: serverTimestamp(),
       });
 
-      toast({ title: "Upload Complete", description: "Document uploaded and indexed successfully." });
+      if (extractionStatus === "completed") {
+        toast({ title: "Upload Complete", description: "Document uploaded and indexed successfully." });
+      }
+
       router.push("/library");
     } catch (error: any) {
       console.error("Upload error:", error);
