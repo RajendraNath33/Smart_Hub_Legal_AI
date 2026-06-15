@@ -1,33 +1,108 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AppLayoutWrapper } from "@/components/layout/app-layout-wrapper";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Library, 
-  Upload, 
-  FileText, 
-  Search, 
-  Database, 
-  Filter, 
-  MoreVertical,
-  Loader2,
-  CheckCircle2,
-  AlertCircle
-} from "lucide-react";
+import { Library, Upload, FileText, Search, Database, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+
+interface DocumentRecord {
+  id: string;
+  title: string;
+  category: string;
+  uploadDate?: { toDate: () => Date } | null;
+  fileUrl: string;
+  fileName?: string;
+  extractedText?: string;
+  notes?: string;
+}
+
+function computeRelevanceScore(doc: DocumentRecord, normalizedQuery: string) {
+  if (!normalizedQuery) return 0;
+
+  const countOccurrences = (source?: string) => {
+    if (!source) return 0;
+    const text = source.toLowerCase();
+    return text.split(normalizedQuery).length - 1;
+  };
+
+  let score = 0;
+  score += countOccurrences(doc.title) * 15;
+  score += countOccurrences(doc.category) * 10;
+  score += countOccurrences(doc.fileName) * 4;
+  score += countOccurrences(doc.notes) * 3;
+  score += countOccurrences(doc.extractedText) * 1;
+  return score;
+}
+
+function snippetForDocument(doc: DocumentRecord, queryText: string) {
+  const text = doc.extractedText || `${doc.title} ${doc.category} ${doc.fileName ?? ""} ${doc.notes ?? ""}`;
+  const normalized = queryText.toLowerCase().trim();
+  const lowerText = text.toLowerCase();
+  const index = lowerText.indexOf(normalized);
+  if (index === -1) {
+    return text.slice(0, 120) + (text.length > 120 ? "…" : "");
+  }
+  const start = Math.max(0, index - 45);
+  const end = Math.min(text.length, index + normalized.length + 80);
+  const snippet = text.slice(start, end).trim();
+  return `${start > 0 ? "…" : ""}${snippet}${end < text.length ? "…" : ""}`;
+}
 
 export default function LibraryPage() {
-  const [isUploading, setIsUploading] = useState(false);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const handleUpload = () => {
-    toast({ title: "Module Not Configured", description: "Storage and indexing services are not yet connected.", variant: "destructive" });
-  };
+  useEffect(() => {
+    const docsQuery = query(collection(db, "legal_documents"), orderBy("uploadDate", "desc"));
+    const unsubscribe = onSnapshot(
+      docsQuery,
+      (snapshot) => {
+        setDocuments(
+          snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<DocumentRecord, "id">),
+          }))
+        );
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Failed to load library documents:", error);
+        toast({
+          title: "Unable to load documents",
+          description: "Please refresh or try again later.",
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const filteredDocuments = useMemo(() => {
+    const normalized = searchTerm.trim().toLowerCase();
+    return documents
+      .map((doc) => ({
+        ...doc,
+        score: computeRelevanceScore(doc, normalized),
+      }))
+      .filter((doc) => normalized === "" || doc.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.uploadDate && b.uploadDate) {
+          return b.uploadDate.toDate().getTime() - a.uploadDate.toDate().getTime();
+        }
+        return 0;
+      });
+  }, [documents, searchTerm]);
 
   return (
     <AppLayoutWrapper>
@@ -40,9 +115,11 @@ export default function LibraryPage() {
             <p className="text-muted-foreground">Manage your localized legal repository. Repository initialization pending.</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleUpload} className="bg-primary hover:bg-primary/90">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Document
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link href="/library/upload" className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Upload Document
+              </Link>
             </Button>
           </div>
         </div>
@@ -78,15 +155,63 @@ export default function LibraryPage() {
             <CardHeader className="pb-2">
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search within indexed library..." className="pl-10" disabled />
+                <Input
+                  placeholder="Search within indexed library..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
-                <AlertCircle className="h-10 w-10 mb-4" />
-                <h3 className="text-lg font-bold font-headline italic">No Documents Found</h3>
-                <p className="text-sm">Connect a storage provider to begin indexing your legal repository.</p>
-              </div>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center opacity-70">
+                  <Loader2 className="h-10 w-10 mb-4 animate-spin" />
+                  <h3 className="text-lg font-bold font-headline italic">Loading documents...</h3>
+                </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
+                  <AlertCircle className="h-10 w-10 mb-4" />
+                  <h3 className="text-lg font-bold font-headline italic">No Documents Found</h3>
+                  <p className="text-sm">Upload a legal PDF or adjust your search query.</p>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-3xl border border-border bg-background">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Upload Date</TableHead>
+                        <TableHead>Preview</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDocuments.map((doc) => (
+                        <TableRow key={doc.id}>
+                          <TableCell>
+                            <Link href={`/library/${doc.id}`} className="font-semibold text-secondary hover:underline">
+                              {doc.title}
+                            </Link>
+                            {searchTerm && (
+                              <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                                {snippetForDocument(doc, searchTerm)}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell>{doc.category}</TableCell>
+                          <TableCell>{doc.uploadDate ? new Date(doc.uploadDate.toDate()).toLocaleDateString() : "-"}</TableCell>
+                          <TableCell>
+                            <Link href={`/library/${doc.id}`} className="text-secondary underline hover:text-secondary/80">
+                              View
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
