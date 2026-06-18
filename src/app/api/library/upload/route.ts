@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { uploadToR2 } from "../../../../lib/r2";
-import { db } from "../../../../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { supabase } from "../../../../lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -38,26 +37,32 @@ export async function POST(request: Request) {
 
     const r2Url = `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${encodeURIComponent(r2Key)}`;
 
-    const docRef = await addDoc(collection(db, "legal_documents"), {
-      title: String(title).trim(),
-      category: String(category),
-      notes: notes ? String(notes).trim() : null,
-      fileName: String(fileName || file.name),
-      fileSize: fileSize ? parseInt(String(fileSize), 10) : file.size,
-      r2Key,
-      r2Url,
-      fileUrl: r2Url,
-      extractedText: extractedText ? String(extractedText) : "",
-      extractionStatus: String(extractionStatus) || "pending",
-      uploaderUid: String(uploaderUid),
-      vectorEmbedding: null,
-      embeddingStatus: "pending",
-      uploadedAt: serverTimestamp(),
-      uploadDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    });
+    const { data, error } = await supabase
+      .from("legal_documents")
+      .insert({
+        title: String(title).trim(),
+        category: String(category),
+        notes: notes ? String(notes).trim() : null,
+        file_name: String(fileName || file.name),
+        file_url: r2Url,
+        r2_key: r2Key,
+        extracted_text: extractedText ? String(extractedText) : "",
+        upload_date: new Date().toISOString(),
+      })
+      .select();
 
-    return NextResponse.json({ documentId: docRef.id, r2Key, r2Url });
+    if (error) {
+      console.error("Supabase insert error:", error);
+      return NextResponse.json({ error: `Failed to save metadata: ${error.message}` }, { status: 500 });
+    }
+
+    const documentId = data && data.length > 0 ? data[0].id : null;
+
+    if (!documentId) {
+      return NextResponse.json({ error: "Failed to retrieve document ID after insert." }, { status: 500 });
+    }
+
+    return NextResponse.json({ documentId, r2Key, r2Url });
   } catch (error: any) {
     console.error("R2 upload route error:", error);
     return NextResponse.json({ error: error?.message || "Failed to upload file to R2." }, { status: 500 });
