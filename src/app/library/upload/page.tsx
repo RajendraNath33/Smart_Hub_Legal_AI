@@ -12,8 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../../../components/ui/textarea";
 import { Upload, ArrowLeft, FileText, Loader2 } from "lucide-react";
 import { useAuth } from "../../../components/auth-provider";
-import { db } from "../../../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "../../../hooks/use-toast";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf";
 
@@ -69,8 +67,28 @@ export default function LibraryUploadPage() {
     setIsUploading(true);
     setExtractedText("");
 
+    let pdfText: string | null = null;
+    let extractionStatus: "completed" | "failed" = "completed";
+
+    try {
+      pdfText = await extractTextFromPdf(file);
+      setExtractedText(pdfText);
+    } catch (extractError) {
+      console.warn("Text extraction failed, continuing with upload:", extractError);
+      extractionStatus = "failed";
+      pdfText = "";
+    }
+
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("title", title.trim());
+    formData.append("category", category);
+    formData.append("notes", notes.trim() || "");
+    formData.append("extractedText", pdfText || "");
+    formData.append("extractionStatus", extractionStatus);
+    formData.append("fileName", file.name);
+    formData.append("fileSize", String(file.size));
+    formData.append("uploaderUid", user.uid);
 
     try {
       const uploadResponse = await fetch("/api/library/upload", {
@@ -84,41 +102,13 @@ export default function LibraryUploadPage() {
         throw new Error(result.error || "Failed to upload PDF to R2.");
       }
 
-      const { r2Key, r2Url } = result;
-      let pdfText: string | null = null;
-      let extractionStatus: "completed" | "failed" = "completed";
-
-      try {
-        pdfText = await extractTextFromPdf(file);
-        setExtractedText(pdfText);
-      } catch (extractError) {
-        console.warn("Text extraction failed, saving metadata anyway:", extractError);
-        extractionStatus = "failed";
+      if (extractionStatus === "failed") {
         toast({
           title: "Upload Completed",
           description: "PDF uploaded, but text extraction failed. Document metadata was still saved.",
           variant: "warning",
         });
-      }
-
-      await addDoc(collection(db, "legal_documents"), {
-        title: title.trim(),
-        category,
-        notes: notes.trim() || null,
-        fileName: file.name,
-        fileSize: file.size,
-        uploadedAt: serverTimestamp(),
-        r2Key,
-        r2Url,
-        extractedText: pdfText,
-        extractionStatus,
-        uploaderUid: user.uid,
-        vectorEmbedding: null,
-        embeddingStatus: "pending",
-        createdAt: serverTimestamp(),
-      });
-
-      if (extractionStatus === "completed") {
+      } else {
         toast({ title: "PDF uploaded successfully", description: "PDF uploaded successfully" });
       }
 
