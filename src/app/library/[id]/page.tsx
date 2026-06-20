@@ -7,18 +7,17 @@ import { AppLayoutWrapper } from "@/components/layout/app-layout-wrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, ArrowLeft, ExternalLink, CalendarDays, Tag, Link as LinkIcon, ListMusic } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 
 interface DocumentRecord {
   id: string;
   title: string;
-  category: string;
-  uploadDate?: { toDate: () => Date } | null;
-  fileUrl: string;
-  fileName?: string;
-  extractedText?: string;
-  notes?: string;
+  category: string | null;
+  upload_date?: string | null;
+  file_url?: string | null;
+  file_name?: string | null;
+  extracted_text?: string | null;
+  notes?: string | null;
 }
 
 export default function LibraryDocumentPage() {
@@ -31,31 +30,27 @@ export default function LibraryDocumentPage() {
   useEffect(() => {
     if (!documentId) return;
 
-    const loadDocument = async () => {
+    async function loadDocument() {
       setLoading(true);
       setError(null);
 
       try {
-        const documentRef = doc(db, "legal_documents", documentId);
-        const snapshot = await getDoc(documentRef);
+        const { data, error } = await supabase
+          .from("legal_documents")
+          .select("*")
+          .eq("id", documentId)
+          .single();
 
-        if (!snapshot.exists()) {
-          setError("Document not found.");
-          setDocument(null);
-          return;
-        }
+        if (error) throw error;
 
-        setDocument({
-          id: snapshot.id,
-          ...(snapshot.data() as Omit<DocumentRecord, "id">),
-        });
+        setDocument(data as DocumentRecord);
       } catch (loadError) {
         console.error("Failed to load document details:", loadError);
         setError("Unable to load document details. Please try again later.");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     loadDocument();
   }, [documentId]);
@@ -101,7 +96,7 @@ export default function LibraryDocumentPage() {
                       <span className="text-sm uppercase tracking-[0.18em] font-semibold">Title</span>
                     </div>
                     <p className="text-lg font-semibold">{document.title}</p>
-                    <p className="text-sm text-muted-foreground">{document.fileName}</p>
+                    <p className="text-sm text-muted-foreground">{document.file_name ?? "-"}</p>
                   </div>
 
                   <div className="space-y-3 rounded-3xl border border-border bg-background p-6">
@@ -109,8 +104,10 @@ export default function LibraryDocumentPage() {
                       <Tag className="h-5 w-5" />
                       <span className="text-sm uppercase tracking-[0.18em] font-semibold">Category</span>
                     </div>
-                    <p className="text-lg font-semibold">{document.category}</p>
-                    <p className="text-sm text-muted-foreground">{document.uploadDate ? new Date(document.uploadDate.toDate()).toLocaleDateString() : "Unknown"}</p>
+                    <p className="text-lg font-semibold">{document.category ?? "-"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {document.upload_date ? new Date(document.upload_date).toLocaleDateString() : "Unknown"}
+                    </p>
                   </div>
                 </div>
 
@@ -120,7 +117,7 @@ export default function LibraryDocumentPage() {
                       <CalendarDays className="h-5 w-5" />
                       <span className="text-sm uppercase tracking-[0.18em] font-semibold">Uploaded</span>
                     </div>
-                    <p>{document.uploadDate ? new Date(document.uploadDate.toDate()).toLocaleString() : "Date not available"}</p>
+                    <p>{document.upload_date ? new Date(document.upload_date).toLocaleString() : "Date not available"}</p>
                   </div>
 
                   <div className="space-y-3 rounded-3xl border border-border bg-background p-6">
@@ -128,15 +125,19 @@ export default function LibraryDocumentPage() {
                       <LinkIcon className="h-5 w-5" />
                       <span className="text-sm uppercase tracking-[0.18em] font-semibold">Source</span>
                     </div>
-                    <a
-                      href={document.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/90"
-                    >
-                      View Document
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
+                    {document.file_url ? (
+                      <a
+                        href={document.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/90"
+                      >
+                        View Document
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No document URL available.</p>
+                    )}
                   </div>
                 </div>
 
@@ -155,11 +156,11 @@ export default function LibraryDocumentPage() {
                     <FileText className="h-5 w-5" />
                     <span className="text-sm uppercase tracking-[0.18em] font-semibold">Extracted Text Preview</span>
                   </div>
-                  {document.extractedText ? (
+                  {document.extracted_text ? (
                     <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-                      <p className="line-clamp-6">{document.extractedText}</p>
+                      <p className="line-clamp-6">{document.extracted_text}</p>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span className="rounded-full border border-border px-2 py-1">{document.extractedText.length.toLocaleString()} characters extracted</span>
+                        <span className="rounded-full border border-border px-2 py-1">{document.extracted_text.length.toLocaleString()} characters extracted</span>
                         <span className="rounded-full border border-border px-2 py-1">First page preview only</span>
                       </div>
                     </div>
