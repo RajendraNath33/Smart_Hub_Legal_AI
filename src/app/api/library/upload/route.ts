@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     const accountId = process.env.R2_ACCOUNT_ID;
     const bucketName = process.env.R2_BUCKET_NAME;
-    const publicUrl = "https://pub-ba849e25dd384d929b47ccc844ab7bea.r2.dev";
+    const publicUrl = "https://files.shilpshakti.org.in";
 
     if (!accountId || !bucketName) {
       return NextResponse.json(
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const safeFileName = String(fileName || file.name).replace(/[^\w.\-() ]+/g, "_");
+    const safeFileName = String(fileName || file.name).replace(/[^\w.\-()]+/g, "_");
     const r2Key = `legal-documents/${Date.now()}-${safeFileName}`;
 
     const arrayBuffer = await file.arrayBuffer();
