@@ -15,7 +15,9 @@ if (!bucketName) {
 }
 
 if (!accessKeyId || !secretAccessKey) {
-  throw new Error("Missing R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY in environment variables.");
+  throw new Error(
+    "Missing R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY in environment variables."
+  );
 }
 
 const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
@@ -31,12 +33,32 @@ export const r2Client = new S3Client({
 
 export const r2BucketName = bucketName;
 
-export async function uploadToR2(key: string, body: ArrayBuffer | Uint8Array | Blob | string) {
+export async function uploadToR2(
+  key: string,
+  body: ArrayBuffer | Uint8Array | Blob | string
+) {
   const value = body instanceof ArrayBuffer ? new Uint8Array(body) : body;
+
+  let contentType = "application/octet-stream";
+
+  if (key.toLowerCase().endsWith(".pdf")) {
+    contentType = "application/pdf";
+  } else if (
+    key.toLowerCase().endsWith(".jpg") ||
+    key.toLowerCase().endsWith(".jpeg")
+  ) {
+    contentType = "image/jpeg";
+  } else if (key.toLowerCase().endsWith(".png")) {
+    contentType = "image/png";
+  }
+
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: key,
     Body: value,
+    ContentType: contentType,
+    ContentDisposition: "inline",
   });
+
   return await r2Client.send(command);
 }
