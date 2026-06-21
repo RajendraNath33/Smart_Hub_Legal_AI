@@ -1,51 +1,61 @@
 'use server';
-/**
- * @fileOverview This file implements a Genkit flow for an AI Legal Assistant.
- * It allows legal professionals to ask complex legal questions and receive
- * well-reasoned, comprehensive answers with precise citations from an internal knowledge base.
- *
- * - aiLegalAssistant - A function that handles the AI legal assistant process.
- * - AILegalAssistantInput - The input type for the aiLegalAssistant function.
- * - AILegalAssistantOutput - The return type for the aiLegalAssistant function.
- */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const AILegalAssistantInputSchema = z.object({
-  legalQuestion: z.string().describe('The complex legal question asked by the user.'),
-  contextDocuments: z.array(z.string()).describe('Relevant legal documents or excerpts from the internal knowledge base to be used as context for the answer. Each string represents a document or a chunk of text.'),
+  legalQuestion: z.string(),
+  contextDocuments: z.array(z.string()),
 });
+
 export type AILegalAssistantInput = z.infer<typeof AILegalAssistantInputSchema>;
 
 const AILegalAssistantOutputSchema = z.object({
-  answer: z.string().describe('The well-reasoned and comprehensive answer to the legal question.'),
-  citations: z.array(z.string()).describe('Precise citations from the provided context documents, directly quoting the relevant passages that support statements in the answer.'),
+  answer: z.string(),
+  citations: z.array(z.string()),
 });
+
 export type AILegalAssistantOutput = z.infer<typeof AILegalAssistantOutputSchema>;
 
-export async function aiLegalAssistant(input: AILegalAssistantInput): Promise<AILegalAssistantOutput> {
+export async function aiLegalAssistant(
+  input: AILegalAssistantInput
+): Promise<AILegalAssistantOutput> {
   return aiLegalAssistantFlow(input);
 }
 
 const aiLegalAssistantPrompt = ai.definePrompt({
   name: 'aiLegalAssistantPrompt',
-  input: {schema: AILegalAssistantInputSchema},
-  output: {schema: AILegalAssistantOutputSchema},
-  prompt: `You are SmartHub Legal AI Assistant.
-  Answer legal education questions in simple Hindi and English.
-  Do not give final legal advice.
-  Always say: verify with bare act, judgment, or advocate before court use.
+  input: { schema: AILegalAssistantInputSchema },
+  output: { schema: AILegalAssistantOutputSchema },
+  prompt: `
+You are SmartHub Legal AI Assistant.
 
-  Use only the provided context documents when answering.
-  If the answer cannot be fully supported by the context, say that the information is not available.
+STRICT RULES:
+1. Answer ONLY from the provided context documents.
+2. Do NOT use outside knowledge.
+3. Do NOT guess.
+4. Do NOT give final legal advice.
+5. If the answer is not clearly available in the provided context, say exactly:
+"इस विषय में मेरे अपलोडेड लीगल डेटाबेस में पर्याप्त जानकारी उपलब्ध नहीं है।"
+6. Answer mainly in simple Hindi. Use English legal terms where useful.
+7. Always add this warning:
+"कृपया कोर्ट में उपयोग से पहले Bare Act, Judgment या Advocate से verify करें."
+8. Mention source document names in citations.
+9. Keep answer structured and easy for LLB students and advocates.
 
-  Legal Question: {{{legalQuestion}}}
+Legal Question:
+{{{legalQuestion}}}
 
-  Context Documents:
-  {{#each contextDocuments}}
-  - {{{this}}}
-  {{/each}}`,
+Context Documents:
+{{#each contextDocuments}}
+---
+{{{this}}}
+{{/each}}
+
+Return:
+- answer
+- citations
+`,
 });
 
 const aiLegalAssistantFlow = ai.defineFlow(
@@ -54,8 +64,36 @@ const aiLegalAssistantFlow = ai.defineFlow(
     inputSchema: AILegalAssistantInputSchema,
     outputSchema: AILegalAssistantOutputSchema,
   },
-  async input => {
-    const {output} = await aiLegalAssistantPrompt(input);
-    return output!;
+  async (input) => {
+    if (!input.contextDocuments || input.contextDocuments.length === 0) {
+      return {
+        answer:
+          'इस विषय में मेरे अपलोडेड लीगल डेटाबेस में पर्याप्त जानकारी उपलब्ध नहीं है।\n\nकृपया कोर्ट में उपयोग से पहले Bare Act, Judgment या Advocate से verify करें.',
+        citations: [],
+      };
+    }
+
+    const hasRealContext = input.contextDocuments.some((doc) => {
+      const clean = doc.replace(/Document:\s*/gi, '').trim();
+      return clean.length > 100;
+    });
+
+    if (!hasRealContext) {
+      return {
+        answer:
+          'इस विषय में मेरे अपलोडेड लीगल डेटाबेस में पर्याप्त जानकारी उपलब्ध नहीं है।\n\nकृपया कोर्ट में उपयोग से पहले Bare Act, Judgment या Advocate से verify करें.',
+        citations: [],
+      };
+    }
+
+    const { output } = await aiLegalAssistantPrompt(input);
+
+    return (
+      output || {
+        answer:
+          'इस विषय में मेरे अपलोडेड लीगल डेटाबेस में पर्याप्त जानकारी उपलब्ध नहीं है।\n\nकृपया कोर्ट में उपयोग से पहले Bare Act, Judgment या Advocate से verify करें.',
+        citations: [],
+      }
+    );
   }
 );
